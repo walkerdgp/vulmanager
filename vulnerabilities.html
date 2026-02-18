@@ -1,0 +1,154 @@
+{% extends "base.html" %}
+{% block title %}Vulnerabilities - VulnManager{% endblock %}
+
+{% block content %}
+<div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+    <div>
+        <h1 class="text-2xl font-bold text-slate-800">Vulnerabilities</h1>
+        <p class="text-sm text-slate-500 mt-1">{{ pagination.total }} results found</p>
+    </div>
+    <a href="{{ url_for('export.export_vulns_pdf', **filters) }}"
+       class="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 transition">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+        Export PDF
+    </a>
+</div>
+
+<!-- Filters -->
+<form method="GET" class="bg-white rounded-xl border border-slate-200 p-4 mb-6 shadow-sm" x-data="{ open: true }">
+    <button type="button" @click="open = !open" class="flex items-center justify-between w-full text-sm font-semibold text-slate-700">
+        <span>Filters</span>
+        <svg :class="open ? 'rotate-180' : ''" class="w-4 h-4 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+    </button>
+    <div x-show="open" x-transition class="mt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div>
+            <label class="block text-xs font-medium text-slate-600 mb-1">Severity</label>
+            <select name="severity" class="w-full text-sm border-slate-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500">
+                <option value="all">All Severities</option>
+                {% for s in ['critical','high','medium','low','info'] %}
+                <option value="{{ s }}" {% if filters.get('severity') == s %}selected{% endif %}>{{ s | capitalize }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div>
+            <label class="block text-xs font-medium text-slate-600 mb-1">Status</label>
+            <select name="status" class="w-full text-sm border-slate-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500">
+                <option value="all">All Statuses</option>
+                {% for s in ['open','confirmed','in_progress','resolved','false_positive','accepted_risk'] %}
+                <option value="{{ s }}" {% if filters.get('status') == s %}selected{% endif %}>{{ s | replace('_',' ') | title }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div>
+            <label class="block text-xs font-medium text-slate-600 mb-1">Host Type</label>
+            <select name="host_type" class="w-full text-sm border-slate-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500">
+                <option value="all">All Types</option>
+                {% for t in ['server','workstation','network_device','iot','cloud','container','other'] %}
+                <option value="{{ t }}" {% if filters.get('host_type') == t %}selected{% endif %}>{{ t | replace('_',' ') | title }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div>
+            <label class="block text-xs font-medium text-slate-600 mb-1">Scanner</label>
+            <select name="scanner" class="w-full text-sm border-slate-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500">
+                <option value="all">All Scanners</option>
+                {% for s in scanners %}
+                <option value="{{ s }}" {% if filters.get('scanner') == s %}selected{% endif %}>{{ s | title }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div>
+            <label class="block text-xs font-medium text-slate-600 mb-1">CVE</label>
+            <input type="text" name="cve" value="{{ filters.get('cve', '') }}" placeholder="e.g. CVE-2021-44228"
+                   class="w-full text-sm border-slate-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500">
+        </div>
+        <div>
+            <label class="block text-xs font-medium text-slate-600 mb-1">Date From</label>
+            <input type="date" name="date_from" value="{{ filters.get('date_from', '') }}"
+                   class="w-full text-sm border-slate-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500">
+        </div>
+        <div>
+            <label class="block text-xs font-medium text-slate-600 mb-1">Date To</label>
+            <input type="date" name="date_to" value="{{ filters.get('date_to', '') }}"
+                   class="w-full text-sm border-slate-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500">
+        </div>
+        <div>
+            <label class="block text-xs font-medium text-slate-600 mb-1">Search</label>
+            <input type="text" name="q" value="{{ filters.get('q', '') }}" placeholder="Title, IP, hostname..."
+                   class="w-full text-sm border-slate-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500">
+        </div>
+        <div class="sm:col-span-2 lg:col-span-4 flex gap-3">
+            <button type="submit" class="px-6 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 transition">Apply Filters</button>
+            <a href="{{ url_for('dashboard.vulnerabilities') }}" class="px-4 py-2 text-sm text-slate-600 hover:text-slate-800 transition">Clear</a>
+        </div>
+    </div>
+</form>
+
+<!-- Vulnerability Table -->
+<div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+    <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+            <thead>
+                <tr class="bg-slate-50 border-b border-slate-200">
+                    <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Severity</th>
+                    <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Title / CVE</th>
+                    <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider hidden md:table-cell">Host</th>
+                    <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider hidden lg:table-cell">Scanner</th>
+                    <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Status</th>
+                    <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider hidden lg:table-cell">CVSS</th>
+                    <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider hidden xl:table-cell">Date</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100">
+                {% for vuln in vulnerabilities %}
+                <tr class="hover:bg-slate-50 transition">
+                    <td class="px-4 py-3">
+                        <span class="inline-flex px-2 py-0.5 rounded-md text-xs font-bold border severity-{{ vuln.severity }}">
+                            {{ vuln.severity | upper }}
+                        </span>
+                    </td>
+                    <td class="px-4 py-3">
+                        <p class="font-medium text-slate-800 truncate max-w-xs">{{ vuln.title }}</p>
+                        {% if vuln.cve_id %}<p class="text-xs text-indigo-600 font-mono mt-0.5">{{ vuln.cve_id }}</p>{% endif %}
+                    </td>
+                    <td class="px-4 py-3 hidden md:table-cell">
+                        <p class="text-slate-700 font-mono text-xs">{{ vuln.host.ip_address }}</p>
+                        {% if vuln.host.hostname %}<p class="text-xs text-slate-400 truncate max-w-[140px]">{{ vuln.host.hostname }}</p>{% endif %}
+                    </td>
+                    <td class="px-4 py-3 hidden lg:table-cell">
+                        <span class="text-xs text-slate-600">{{ vuln.scanner or '-' }}</span>
+                    </td>
+                    <td class="px-4 py-3">
+                        <span class="inline-flex px-2 py-0.5 rounded-md text-xs font-semibold status-{{ vuln.status }}">
+                            {{ vuln.status | replace('_',' ') | title }}
+                        </span>
+                    </td>
+                    <td class="px-4 py-3 hidden lg:table-cell font-mono text-xs {% if vuln.cvss_score and vuln.cvss_score >= 9.0 %}text-red-600 font-bold{% elif vuln.cvss_score and vuln.cvss_score >= 7.0 %}text-orange-600{% else %}text-slate-600{% endif %}">
+                        {{ '%.1f' % vuln.cvss_score if vuln.cvss_score else '-' }}
+                    </td>
+                    <td class="px-4 py-3 hidden xl:table-cell text-xs text-slate-500">
+                        {{ vuln.created_at.strftime('%Y-%m-%d') }}
+                    </td>
+                </tr>
+                {% else %}
+                <tr><td colspan="7" class="px-4 py-12 text-center text-slate-400">No vulnerabilities found matching your filters.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    {% if pagination.pages > 1 %}
+    <div class="px-4 py-3 border-t border-slate-200 flex items-center justify-between">
+        <p class="text-xs text-slate-500">Page {{ pagination.page }} of {{ pagination.pages }}</p>
+        <div class="flex gap-1">
+            {% if pagination.has_prev %}
+            <a href="?page={{ pagination.prev_num }}&{{ filters | urlencode }}" class="px-3 py-1 text-sm rounded border border-slate-300 hover:bg-slate-50">Prev</a>
+            {% endif %}
+            {% if pagination.has_next %}
+            <a href="?page={{ pagination.next_num }}&{{ filters | urlencode }}" class="px-3 py-1 text-sm rounded border border-slate-300 hover:bg-slate-50">Next</a>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

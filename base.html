@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}VulnManager{% endblock %}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Plus Jakarta Sans', 'system-ui', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace'],
+                    },
+                    colors: {
+                        brand: { 50:'#eef2ff', 100:'#e0e7ff', 200:'#c7d2fe', 500:'#6366f1', 600:'#4f46e5', 700:'#4338ca', 800:'#3730a3', 900:'#312e81' },
+                        sev: { critical:'#dc2626', high:'#ea580c', medium:'#d97706', low:'#2563eb', info:'#6b7280' }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        [x-cloak] { display: none !important; }
+        .severity-critical { @apply bg-red-100 text-red-800 border-red-200; }
+        .severity-high { @apply bg-orange-100 text-orange-800 border-orange-200; }
+        .severity-medium { @apply bg-amber-100 text-amber-800 border-amber-200; }
+        .severity-low { @apply bg-blue-100 text-blue-800 border-blue-200; }
+        .severity-info { @apply bg-gray-100 text-gray-700 border-gray-200; }
+        .status-open { @apply bg-red-50 text-red-700; }
+        .status-confirmed { @apply bg-orange-50 text-orange-700; }
+        .status-in_progress { @apply bg-yellow-50 text-yellow-700; }
+        .status-resolved { @apply bg-emerald-50 text-emerald-700; }
+        .status-false_positive { @apply bg-slate-50 text-slate-500; }
+        .status-accepted_risk { @apply bg-purple-50 text-purple-700; }
+    </style>
+</head>
+<body class="h-full font-sans bg-slate-50 text-slate-800" x-data="{ sidebarOpen: false }">
+
+<div class="flex h-full">
+    <!-- Mobile sidebar backdrop -->
+    <div x-show="sidebarOpen" x-cloak @click="sidebarOpen = false"
+         class="fixed inset-0 bg-black/40 z-40 lg:hidden" x-transition.opacity></div>
+
+    <!-- Sidebar -->
+    <aside :class="sidebarOpen ? 'translate-x-0' : '-translate-x-full'"
+           class="fixed inset-y-0 left-0 z-50 w-64 bg-slate-900 text-white transform transition-transform duration-200 ease-in-out lg:translate-x-0 lg:static lg:inset-0 flex flex-col">
+
+        <!-- Logo -->
+        <div class="flex items-center gap-3 px-5 py-5 border-b border-slate-700/50">
+            <div class="w-9 h-9 rounded-lg bg-brand-600 flex items-center justify-center font-bold text-sm">VM</div>
+            <div>
+                <div class="font-bold text-sm tracking-wide">VulnManager</div>
+                <div class="text-[10px] text-slate-400 uppercase tracking-widest">Security Platform</div>
+            </div>
+        </div>
+
+        <!-- Tenant Switcher -->
+        {% if user_tenants is defined and user_tenants %}
+        <div class="px-4 py-3 border-b border-slate-700/50">
+            <label class="text-[10px] uppercase text-slate-500 tracking-wider font-semibold">Tenant</label>
+            <select onchange="window.location.href='/switch-tenant/'+this.value"
+                    class="mt-1 w-full bg-slate-800 border border-slate-700 rounded-md text-sm text-white px-2 py-1.5 focus:ring-brand-500 focus:border-brand-500">
+                {% for t in user_tenants %}
+                <option value="{{ t.id }}" {% if tenant and t.id == tenant.id %}selected{% endif %}>{{ t.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        {% endif %}
+
+        <!-- Navigation -->
+        <nav class="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
+            <a href="{{ url_for('dashboard.index') }}"
+               class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium {% if request.endpoint == 'dashboard.index' %}bg-brand-600/20 text-brand-200{% else %}text-slate-300 hover:bg-slate-800 hover:text-white{% endif %} transition">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
+                Dashboard
+            </a>
+            <a href="{{ url_for('dashboard.vulnerabilities') }}"
+               class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium {% if request.endpoint == 'dashboard.vulnerabilities' %}bg-brand-600/20 text-brand-200{% else %}text-slate-300 hover:bg-slate-800 hover:text-white{% endif %} transition">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+                Vulnerabilities
+            </a>
+            <a href="{{ url_for('dashboard.hosts') }}"
+               class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium {% if request.endpoint == 'dashboard.hosts' %}bg-brand-600/20 text-brand-200{% else %}text-slate-300 hover:bg-slate-800 hover:text-white{% endif %} transition">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01"/></svg>
+                Hosts
+            </a>
+            <a href="{{ url_for('dashboard.scans') }}"
+               class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium {% if request.endpoint == 'dashboard.scans' %}bg-brand-600/20 text-brand-200{% else %}text-slate-300 hover:bg-slate-800 hover:text-white{% endif %} transition">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                Scans
+            </a>
+
+            <div class="pt-4 mt-4 border-t border-slate-700/50">
+                <p class="px-3 text-[10px] uppercase text-slate-500 tracking-wider font-semibold mb-2">Reports</p>
+                <a href="{{ url_for('export.export_vulns_pdf') }}"
+                   class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-slate-300 hover:bg-slate-800 hover:text-white transition">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                    Export PDF
+                </a>
+            </div>
+        </nav>
+
+        <!-- User -->
+        <div class="px-4 py-4 border-t border-slate-700/50">
+            <div class="flex items-center gap-3">
+                <div class="w-8 h-8 rounded-full bg-brand-600 flex items-center justify-center text-xs font-bold">
+                    {{ current_user.display_name[0] if current_user.display_name else current_user.username[0] | upper }}
+                </div>
+                <div class="flex-1 min-w-0">
+                    <p class="text-sm font-medium truncate">{{ current_user.display_name or current_user.username }}</p>
+                    <p class="text-[10px] text-slate-400">{% if role %}{{ role | capitalize }}{% endif %}</p>
+                </div>
+                <a href="{{ url_for('auth.logout') }}" class="text-slate-400 hover:text-white transition" title="Logout">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
+                </a>
+            </div>
+        </div>
+    </aside>
+
+    <!-- Main Content -->
+    <div class="flex-1 flex flex-col min-w-0 overflow-hidden">
+        <!-- Top bar (mobile) -->
+        <header class="lg:hidden sticky top-0 z-30 bg-white border-b border-slate-200 px-4 py-3 flex items-center gap-4">
+            <button @click="sidebarOpen = true" class="text-slate-600">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+            </button>
+            <span class="font-bold text-slate-800">VulnManager</span>
+        </header>
+
+        <main class="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
+            {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+            {% for category, message in messages %}
+            <div class="mb-4 px-4 py-3 rounded-lg text-sm font-medium
+                {% if category == 'error' %}bg-red-50 text-red-800 border border-red-200
+                {% elif category == 'success' %}bg-emerald-50 text-emerald-800 border border-emerald-200
+                {% else %}bg-blue-50 text-blue-800 border border-blue-200{% endif %}">
+                {{ message }}
+            </div>
+            {% endfor %}
+            {% endif %}
+            {% endwith %}
+
+            {% block content %}{% endblock %}
+        </main>
+    </div>
+</div>
+
+{% block scripts %}{% endblock %}
+</body>
+</html>

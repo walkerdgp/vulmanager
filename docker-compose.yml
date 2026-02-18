@@ -1,0 +1,74 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  db:
+    image: postgres:16-alpine
+    container_name: vulnmanager-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: vulnmanager
+      POSTGRES_USER: vulnmanager
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-ChangeMeNow2024!}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U vulnmanager"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis (for Celery task queue)
+  redis:
+    image: redis:7-alpine
+    container_name: vulnmanager-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # VulnManager Web Application
+  web:
+    build: .
+    container_name: vulnmanager-web
+    restart: unless-stopped
+    ports:
+      - "${APP_PORT:-5000}:5000"
+    environment:
+      FLASK_ENV: production
+      SECRET_KEY: ${SECRET_KEY:-change-this-to-a-random-64-char-string}
+      DATABASE_URL: postgresql://vulnmanager:${DB_PASSWORD:-ChangeMeNow2024!}@db:5432/vulnmanager
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./app:/app/app  # Mount for development (remove in production)
+
+  # Celery Worker (for async scan tasks)
+  worker:
+    build: .
+    container_name: vulnmanager-worker
+    restart: unless-stopped
+    command: celery -A app.celery_app worker --loglevel=info
+    environment:
+      FLASK_ENV: production
+      SECRET_KEY: ${SECRET_KEY:-change-this-to-a-random-64-char-string}
+      DATABASE_URL: postgresql://vulnmanager:${DB_PASSWORD:-ChangeMeNow2024!}@db:5432/vulnmanager
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+volumes:
+  pgdata:

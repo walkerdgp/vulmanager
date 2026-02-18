@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Vulnerability Report - {{ tenant.name }}</title>
+    <style>
+        @page { size: A4; margin: 2cm; @bottom-center { content: "Page " counter(page) " of " counter(pages); font-size: 8pt; color: #666; } }
+        body { font-family: 'Helvetica', 'Arial', sans-serif; font-size: 10pt; color: #1e293b; line-height: 1.5; }
+        h1 { font-size: 22pt; color: #1e293b; margin-bottom: 4pt; }
+        h2 { font-size: 14pt; color: #334155; border-bottom: 2px solid #e2e8f0; padding-bottom: 4pt; margin-top: 24pt; }
+        .meta { font-size: 9pt; color: #64748b; }
+        .summary-grid { display: flex; gap: 12pt; margin: 16pt 0; }
+        .summary-card { flex: 1; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6pt; padding: 10pt; text-align: center; }
+        .summary-card .number { font-size: 20pt; font-weight: bold; }
+        .summary-card .label { font-size: 8pt; color: #64748b; text-transform: uppercase; letter-spacing: 0.5pt; }
+        .filters-box { background: #f1f5f9; border-radius: 6pt; padding: 8pt 12pt; margin: 12pt 0; font-size: 9pt; }
+        table { width: 100%; border-collapse: collapse; margin-top: 12pt; font-size: 9pt; }
+        th { background: #f1f5f9; padding: 6pt 8pt; text-align: left; font-size: 8pt; text-transform: uppercase; color: #475569; border-bottom: 2px solid #cbd5e1; }
+        td { padding: 6pt 8pt; border-bottom: 1px solid #e2e8f0; vertical-align: top; }
+        tr:nth-child(even) { background: #fafafa; }
+        .sev { display: inline-block; padding: 1pt 6pt; border-radius: 3pt; font-size: 8pt; font-weight: bold; text-transform: uppercase; }
+        .sev-critical { background: #fee2e2; color: #991b1b; }
+        .sev-high { background: #ffedd5; color: #9a3412; }
+        .sev-medium { background: #fef3c7; color: #92400e; }
+        .sev-low { background: #dbeafe; color: #1e40af; }
+        .sev-info { background: #f3f4f6; color: #4b5563; }
+        .footer { margin-top: 24pt; padding-top: 12pt; border-top: 1px solid #e2e8f0; font-size: 8pt; color: #94a3b8; text-align: center; }
+    </style>
+</head>
+<body>
+    <h1>Vulnerability Report</h1>
+    <p class="meta"><strong>{{ tenant.name }}</strong> — Generated {{ generated_at.strftime('%Y-%m-%d %H:%M UTC') }} by {{ generated_by }}</p>
+
+    {% if active_filters %}
+    <div class="filters-box">
+        <strong>Active Filters:</strong>
+        {% for key, val in active_filters.items() %} {{ key }}: <strong>{{ val }}</strong>{% if not loop.last %} · {% endif %}{% endfor %}
+    </div>
+    {% endif %}
+
+    <div class="summary-grid">
+        <div class="summary-card">
+            <div class="number">{{ total_count }}</div>
+            <div class="label">Total</div>
+        </div>
+        <div class="summary-card">
+            <div class="number" style="color:#dc2626">{{ severity_summary.get('critical', 0) }}</div>
+            <div class="label">Critical</div>
+        </div>
+        <div class="summary-card">
+            <div class="number" style="color:#ea580c">{{ severity_summary.get('high', 0) }}</div>
+            <div class="label">High</div>
+        </div>
+        <div class="summary-card">
+            <div class="number" style="color:#d97706">{{ severity_summary.get('medium', 0) }}</div>
+            <div class="label">Medium</div>
+        </div>
+        <div class="summary-card">
+            <div class="number" style="color:#2563eb">{{ severity_summary.get('low', 0) }}</div>
+            <div class="label">Low</div>
+        </div>
+    </div>
+
+    <h2>Vulnerability Details</h2>
+    <table>
+        <thead>
+            <tr>
+                <th style="width:8%">Severity</th>
+                <th style="width:28%">Title</th>
+                <th style="width:10%">CVE</th>
+                <th style="width:12%">Host</th>
+                <th style="width:8%">CVSS</th>
+                <th style="width:8%">Status</th>
+                <th style="width:26%">Solution</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for v in vulns %}
+            <tr>
+                <td><span class="sev sev-{{ v.severity }}">{{ v.severity }}</span></td>
+                <td><strong>{{ v.title }}</strong></td>
+                <td style="font-family:monospace;font-size:8pt">{{ v.cve_id or '-' }}</td>
+                <td style="font-family:monospace;font-size:8pt">{{ v.host.ip_address }}<br><span style="color:#94a3b8">{{ v.host.hostname or '' }}</span></td>
+                <td>{{ '%.1f' % v.cvss_score if v.cvss_score else '-' }}</td>
+                <td>{{ v.status | replace('_',' ') | title }}</td>
+                <td style="font-size:8pt">{{ (v.solution or '-')[:150] }}{% if v.solution and v.solution|length > 150 %}...{% endif %}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <div class="footer">
+        VulnManager — Confidential Security Report — {{ tenant.name }}
+    </div>
+</body>
+</html>
